@@ -383,6 +383,15 @@
                   </div>
                 </div>
 
+                <!-- Fullscreen Button -->
+                <button
+                  id="fullscreen-btn"
+                  class="w-8 h-8 rounded-md bg-transparent hover:bg-highlight-med text-muted hover:text-text transition-all flex items-center justify-center"
+                  title="Enter Fullscreen"
+                >
+                  <i class="bx bx-fullscreen text-lg"></i>
+                </button>
+
                 <!-- Browser Menu -->
                 <div class="relative">
                   <button
@@ -476,6 +485,13 @@
                     <div class="px-3 py-1 text-xs font-medium text-muted uppercase tracking-wide border-b border-highlight-med mb-2 mt-3">
                       Settings
                     </div>
+                    <button
+                      id="carbon-settings-btn"
+                      class="w-full flex items-center gap-3 px-3 py-2 text-text hover:bg-highlight-med transition-colors text-sm"
+                    >
+                      <i class="bx bx-cog text-foam"></i>
+                      <span>Carbon Settings</span>
+                    </button>
                     <button
                       id="wisp-btn"
                       class="w-full flex items-center gap-3 px-3 py-2 text-text hover:bg-highlight-med transition-colors text-sm"
@@ -1259,6 +1275,15 @@
                 iframe.dataset.loadedUrl = url;
               } else if (url === "carbon://history") {
                 iframe.src = "/history.html";
+                iframe.dataset.loadedUrl = url;
+              } else if (url === "carbon://settings") {
+                iframe.src = "/settings.html";
+                iframe.dataset.loadedUrl = url;
+              } else if (url === "carbon://ai") {
+                iframe.src = "/ai.html";
+                iframe.dataset.loadedUrl = url;
+              } else if (url === "carbon://games") {
+                iframe.src = "/games.html";
                 iframe.dataset.loadedUrl = url;
               }
               return;
@@ -2305,8 +2330,216 @@
             type: 'carbon-vertical-tabs-state',
             enabled: verticalTabsMode
           }, '*');
+        } else if (event.data && event.data.type === 'carbon-settings-updated') {
+          // Handle settings updates from settings page
+          const settings = event.data.settings;
+          applyGlobalSettings(settings);
         }
       });
+
+      // -- Carbon Settings Functions --
+      function applyGlobalSettings(settings) {
+        if (settings.panicKey) {
+          localStorage.setItem('carbon-panic-key', settings.panicKey);
+        }
+        if (settings.panicUrl) {
+          localStorage.setItem('carbon-panic-url', settings.panicUrl);
+        }
+        if (settings.background) {
+          localStorage.setItem('carbon-background', settings.background);
+          applyBackgroundTheme(settings.background);
+        }
+        if (settings.cloaking) {
+          localStorage.setItem('carbon-cloak-enabled', settings.cloaking.enabled);
+          localStorage.setItem('carbon-cloak-title', settings.cloaking.title);
+          localStorage.setItem('carbon-cloak-favicon', settings.cloaking.favicon);
+          applyTabCloaking(settings.cloaking);
+        }
+      }
+
+      function applyBackgroundTheme(background) {
+        const body = document.body;
+        const customBg = localStorage.getItem('carbon-custom-bg');
+        
+        if (customBg) {
+          body.style.background = `url(${customBg}) center/cover fixed`;
+          body.style.backgroundAttachment = 'fixed';
+        } else {
+          switch (background) {
+            case 'black':
+              body.style.background = '#000000';
+              body.className = body.className.replace(/bg-gradient-to-br.*?overlay/, 'bg-black');
+              break;
+            case 'white':
+              body.style.background = '#ffffff';
+              body.className = body.className.replace(/bg-gradient-to-br.*?overlay/, 'bg-white');
+              break;
+            case 'mocha':
+              body.style.background = 'linear-gradient(135deg, #1e1e2e 0%, #313244 50%, #45475a 100%)';
+              break;
+            default:
+              body.style.background = '';
+              body.className = body.className.includes('bg-gradient-to-br') ? 
+                body.className : body.className + ' bg-gradient-to-br from-base via-surface to-overlay';
+              break;
+          }
+        }
+      }
+
+      function applyTabCloaking(cloaking) {
+        if (cloaking.enabled && cloaking.title) {
+          document.title = cloaking.title;
+          
+          if (cloaking.favicon) {
+            const existingFavicon = document.querySelector("link[rel*='icon']");
+            if (existingFavicon) {
+              existingFavicon.href = cloaking.favicon;
+            } else {
+              const link = document.createElement('link');
+              link.type = 'image/x-icon';
+              link.rel = 'shortcut icon';
+              link.href = cloaking.favicon;
+              document.head.appendChild(link);
+            }
+          }
+        }
+      }
+
+      function setupTeacherPrevention() {
+        // Disable right-click if enabled
+        if (localStorage.getItem('carbon-disable-right-click') === 'true') {
+          document.addEventListener('contextmenu', e => e.preventDefault());
+        }
+        
+        // Disable text selection if enabled
+        if (localStorage.getItem('carbon-disable-select') === 'true') {
+          document.body.style.userSelect = 'none';
+          document.body.style.webkitUserSelect = 'none';
+          document.body.style.mozUserSelect = 'none';
+        }
+        
+        // Hide cursor when idle if enabled
+        if (localStorage.getItem('carbon-hide-cursor') === 'true') {
+          let cursorTimer;
+          const hideCursor = () => {
+            document.body.style.cursor = 'none';
+          };
+          const showCursor = () => {
+            document.body.style.cursor = 'default';
+            clearTimeout(cursorTimer);
+            cursorTimer = setTimeout(hideCursor, 3000);
+          };
+          document.addEventListener('mousemove', showCursor);
+          document.addEventListener('mousedown', showCursor);
+        }
+        
+        // Blur on unfocus if enabled
+        if (localStorage.getItem('carbon-blur-unfocus') === 'true') {
+          window.addEventListener('blur', () => {
+            document.body.style.filter = 'blur(10px)';
+          });
+          window.addEventListener('focus', () => {
+            document.body.style.filter = 'none';
+          });
+        }
+      }
+
+      function setupClosePrevention() {
+        if (localStorage.getItem('carbon-close-prevention') === 'true') {
+          const confirmClose = localStorage.getItem('carbon-confirm-close') === 'true';
+          const closeMessage = localStorage.getItem('carbon-close-message') || 'Are you sure you want to close Carbon?';
+          
+          if (confirmClose) {
+            window.addEventListener('beforeunload', (e) => {
+              e.preventDefault();
+              e.returnValue = closeMessage;
+              return closeMessage;
+            });
+          }
+        }
+      }
+
+      function setupPanicKey() {
+        const panicKey = localStorage.getItem('carbon-panic-key');
+        if (panicKey) {
+          document.addEventListener('keydown', (e) => {
+            if (e.key.toLowerCase() === panicKey.toLowerCase()) {
+              const panicUrl = localStorage.getItem('carbon-panic-url') || 'https://classroom.google.com';
+              window.location.href = panicUrl;
+            }
+          });
+        }
+      }
+
+      function setupFullscreenToggle() {
+        const fullscreenBtn = document.getElementById('fullscreen-btn');
+        const isFullscreenEnabled = localStorage.getItem('carbon-fullscreen-enabled') === 'true';
+        
+        if (isFullscreenEnabled) {
+          fullscreenBtn.style.display = 'flex';
+        } else {
+          fullscreenBtn.style.display = 'none';
+        }
+        
+        fullscreenBtn.addEventListener('click', () => {
+          if (!document.fullscreenElement) {
+            document.documentElement.requestFullscreen().catch(err => {
+              console.log('Error attempting to enable fullscreen:', err);
+            });
+          } else {
+            document.exitFullscreen();
+          }
+        });
+        
+        // Update button icon based on fullscreen state
+        document.addEventListener('fullscreenchange', () => {
+          const icon = fullscreenBtn.querySelector('i');
+          if (document.fullscreenElement) {
+            icon.className = 'bx bx-exit-fullscreen text-lg';
+            fullscreenBtn.title = 'Exit Fullscreen';
+          } else {
+            icon.className = 'bx bx-fullscreen text-lg';
+            fullscreenBtn.title = 'Enter Fullscreen';
+          }
+        });
+      }
+
+      // Add event listener for settings button
+      document.getElementById('carbon-settings-btn').addEventListener('click', function() {
+        const tab = getActiveTab();
+        if (tab) {
+          updateTabHistory(tab, 'carbon://settings');
+          renderTabs();
+          renderTabContent(tab);
+        }
+        dropdown.classList.add('hidden');
+      });
+
+      // Initialize Carbon features
+      function initializeCarbonFeatures() {
+        // Apply saved background theme
+        const savedBackground = localStorage.getItem('carbon-background');
+        if (savedBackground) {
+          applyBackgroundTheme(savedBackground);
+        }
+        
+        // Apply saved tab cloaking
+        const cloakingEnabled = localStorage.getItem('carbon-cloak-enabled') === 'true';
+        if (cloakingEnabled) {
+          const cloaking = {
+            enabled: true,
+            title: localStorage.getItem('carbon-cloak-title') || '',
+            favicon: localStorage.getItem('carbon-cloak-favicon') || ''
+          };
+          applyTabCloaking(cloaking);
+        }
+        
+        // Setup other features
+        setupTeacherPrevention();
+        setupClosePrevention();
+        setupPanicKey();
+        setupFullscreenToggle();
+      }
 
       // -- Keyboard Shortcuts --
       document.addEventListener("keydown", (e) => {
@@ -2370,6 +2603,18 @@
           e.preventDefault();
           if (activeTab) openTabContextMenu(activeTab);
         }
+        
+        // Disable dev tools shortcuts if enabled
+        if (localStorage.getItem('carbon-disable-devtools') === 'true') {
+          if (e.key === 'F12' || 
+              (e.ctrlKey && e.shiftKey && e.key === 'I') || 
+              (e.ctrlKey && e.shiftKey && e.key === 'J') || 
+              (e.ctrlKey && e.shiftKey && e.key === 'C') ||
+              (e.ctrlKey && e.key === 'U')) {
+            e.preventDefault();
+            return false;
+          }
+        }
       });
 
       // -- INIT --
@@ -2416,6 +2661,9 @@
       
       if (tabs.length === 0) addTab("carbon://newtab");
       else loadTabsData();
+      
+      // Initialize Carbon features
+      initializeCarbonFeatures();
 
       // Initialize sortable for horizontal tabs
       const tabsContainer = document.getElementById("tabs-bar");
