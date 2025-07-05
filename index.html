@@ -2334,6 +2334,9 @@
           // Handle settings updates from settings page
           const settings = event.data.settings;
           applyGlobalSettings(settings);
+        } else if (event.data && event.data.type === 'carbon-settings-refresh') {
+          // Refresh all settings when settings page saves changes
+          refreshCarbonSettings();
         }
       });
 
@@ -2361,6 +2364,9 @@
         const body = document.body;
         const customBg = localStorage.getItem('carbon-custom-bg');
         
+        // Remove existing background classes
+        body.className = body.className.replace(/bg-gradient-to-br.*?overlay|bg-black|bg-white/g, '');
+        
         if (customBg) {
           body.style.background = `url(${customBg}) center/cover fixed`;
           body.style.backgroundAttachment = 'fixed';
@@ -2368,19 +2374,36 @@
           switch (background) {
             case 'black':
               body.style.background = '#000000';
-              body.className = body.className.replace(/bg-gradient-to-br.*?overlay/, 'bg-black');
+              body.style.color = '#ffffff';
+              // Update all text colors for black theme
+              document.documentElement.style.setProperty('--text-color', '#ffffff');
+              document.documentElement.style.setProperty('--surface-color', '#1a1a1a');
+              document.documentElement.style.setProperty('--overlay-color', '#333333');
               break;
             case 'white':
               body.style.background = '#ffffff';
-              body.className = body.className.replace(/bg-gradient-to-br.*?overlay/, 'bg-white');
+              body.style.color = '#000000';
+              // Update all text colors for white theme
+              document.documentElement.style.setProperty('--text-color', '#000000');
+              document.documentElement.style.setProperty('--surface-color', '#f8f9fa');
+              document.documentElement.style.setProperty('--overlay-color', '#e9ecef');
               break;
             case 'mocha':
               body.style.background = 'linear-gradient(135deg, #1e1e2e 0%, #313244 50%, #45475a 100%)';
+              body.style.color = '#cdd6f4';
+              // Update colors for mocha theme
+              document.documentElement.style.setProperty('--text-color', '#cdd6f4');
+              document.documentElement.style.setProperty('--surface-color', '#1e1e2e');
+              document.documentElement.style.setProperty('--overlay-color', '#313244');
               break;
             default:
               body.style.background = '';
-              body.className = body.className.includes('bg-gradient-to-br') ? 
-                body.className : body.className + ' bg-gradient-to-br from-base via-surface to-overlay';
+              body.style.color = '';
+              body.className += ' bg-gradient-to-br from-base via-surface to-overlay';
+              // Reset to default colors
+              document.documentElement.style.setProperty('--text-color', '#e0def4');
+              document.documentElement.style.setProperty('--surface-color', '#1f1d2e');
+              document.documentElement.style.setProperty('--overlay-color', '#26233a');
               break;
           }
         }
@@ -2388,20 +2411,24 @@
 
       function applyTabCloaking(cloaking) {
         if (cloaking.enabled && cloaking.title) {
+          // Apply cloaking to main browser tab
           document.title = cloaking.title;
           
           if (cloaking.favicon) {
-            const existingFavicon = document.querySelector("link[rel*='icon']");
-            if (existingFavicon) {
-              existingFavicon.href = cloaking.favicon;
-            } else {
-              const link = document.createElement('link');
-              link.type = 'image/x-icon';
-              link.rel = 'shortcut icon';
-              link.href = cloaking.favicon;
-              document.head.appendChild(link);
-            }
+            // Remove existing favicon
+            const existingFavicons = document.querySelectorAll("link[rel*='icon']");
+            existingFavicons.forEach(favicon => favicon.remove());
+            
+            // Add new favicon
+            const link = document.createElement('link');
+            link.type = 'image/x-icon';
+            link.rel = 'shortcut icon';
+            link.href = cloaking.favicon;
+            document.head.appendChild(link);
           }
+        } else {
+          // Reset to default title if cloaking is disabled
+          document.title = 'CARBON';
         }
       }
 
@@ -2460,15 +2487,8 @@
       }
 
       function setupPanicKey() {
-        const panicKey = localStorage.getItem('carbon-panic-key');
-        if (panicKey) {
-          document.addEventListener('keydown', (e) => {
-            if (e.key.toLowerCase() === panicKey.toLowerCase()) {
-              const panicUrl = localStorage.getItem('carbon-panic-url') || 'https://classroom.google.com';
-              window.location.href = panicUrl;
-            }
-          });
-        }
+        // Panic key is now handled globally above
+        // This function is kept for compatibility
       }
 
       function setupFullscreenToggle() {
@@ -2518,28 +2538,77 @@
       // Initialize Carbon features
       function initializeCarbonFeatures() {
         // Apply saved background theme
-        const savedBackground = localStorage.getItem('carbon-background');
-        if (savedBackground) {
-          applyBackgroundTheme(savedBackground);
-        }
+        const savedBackground = localStorage.getItem('carbon-background') || 'default';
+        applyBackgroundTheme(savedBackground);
         
         // Apply saved tab cloaking
         const cloakingEnabled = localStorage.getItem('carbon-cloak-enabled') === 'true';
-        if (cloakingEnabled) {
-          const cloaking = {
-            enabled: true,
-            title: localStorage.getItem('carbon-cloak-title') || '',
-            favicon: localStorage.getItem('carbon-cloak-favicon') || ''
-          };
-          applyTabCloaking(cloaking);
-        }
+        const cloaking = {
+          enabled: cloakingEnabled,
+          title: localStorage.getItem('carbon-cloak-title') || '',
+          favicon: localStorage.getItem('carbon-cloak-favicon') || ''
+        };
+        applyTabCloaking(cloaking);
         
         // Setup other features
         setupTeacherPrevention();
         setupClosePrevention();
         setupPanicKey();
         setupFullscreenToggle();
+        
+        // Listen for localStorage changes (for settings updates)
+        window.addEventListener('storage', function(e) {
+          if (e.key && e.key.startsWith('carbon-')) {
+            // Refresh all features when settings change
+            initializeCarbonFeatures();
+          }
+        });
+        
+        // Also listen for settings updates from settings page
+        window.addEventListener('message', function(e) {
+          if (e.data && e.data.type === 'carbon-settings-refresh') {
+            initializeCarbonFeatures();
+          }
+        });
       }
+
+      // Add function to refresh settings from settings page
+      function refreshCarbonSettings() {
+        const savedBackground = localStorage.getItem('carbon-background') || 'default';
+        applyBackgroundTheme(savedBackground);
+        
+        const cloakingEnabled = localStorage.getItem('carbon-cloak-enabled') === 'true';
+        const cloaking = {
+          enabled: cloakingEnabled,
+          title: localStorage.getItem('carbon-cloak-title') || '',
+          favicon: localStorage.getItem('carbon-cloak-favicon') || ''
+        };
+        applyTabCloaking(cloaking);
+        
+        // Re-setup panic key in case it changed
+        setupPanicKey();
+        setupFullscreenToggle();
+      }
+
+      // -- Global Panic Key Handler --
+      document.addEventListener("keydown", (e) => {
+        // Handle panic key first (highest priority)
+        const panicKey = localStorage.getItem('carbon-panic-key');
+        if (panicKey && e.key.toLowerCase() === panicKey.toLowerCase()) {
+          e.preventDefault();
+          e.stopPropagation();
+          const panicUrl = localStorage.getItem('carbon-panic-url') || 'https://classroom.google.com';
+          // Close all tabs and redirect immediately
+          tabs.forEach(tab => {
+            const iframe = document.getElementById(`iframe-${tab.id}`);
+            if (iframe) {
+              iframe.remove();
+            }
+          });
+          window.location.href = panicUrl;
+          return;
+        }
+      }, true); // Use capture phase to catch event early
 
       // -- Keyboard Shortcuts --
       document.addEventListener("keydown", (e) => {
